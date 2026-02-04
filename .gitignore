@@ -1,0 +1,49 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+*.csproj.user
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+[Oo]ut/
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+
+# Secrets
+.env
+*.env
+!.env.example
+appsettings.*.local.json
+secrets.json
+cloudflare/credentials.json
+
+# Docker
+docker-compose.override.local.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

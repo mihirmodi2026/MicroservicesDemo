@@ -1,0 +1,33 @@
+# Cloudflare Tunnel Configuration
+# Replace YOUR_TUNNEL_ID with your actual tunnel ID from Cloudflare Zero Trust dashboard
+
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /etc/cloudflared/credentials.json
+
+# Ingress rules - route traffic to your services
+ingress:
+  # API Gateway - main entry point
+  - hostname: api.yourdomain.com
+    service: http://apigateway:5000
+    originRequest:
+      noTLSVerify: true
+
+  # Health check endpoint
+  - hostname: api.yourdomain.com
+    path: /health
+    service: http://apigateway:5000/health
+
+  # Direct access to User Service (optional, for debugging)
+  - hostname: users.yourdomain.com
+    service: http://userservice:5001
+    originRequest:
+      noTLSVerify: true
+
+  # Direct access to Product Service (optional, for debugging)
+  - hostname: products.yourdomain.com
+    service: http://productservice:5002
+    originRequest:
+      noTLSVerify: true
+
+  # Catch-all rule (required)
+  - service: http_status:404

@@ -1,0 +1,14 @@
+# Development overrides
+services:
+  userservice:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  productservice:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  # API Gateway needs Production config to use Docker service names
+  apigateway:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production

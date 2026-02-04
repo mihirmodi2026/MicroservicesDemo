@@ -1,0 +1,19 @@
+version: '3.8'
+
+# Use this compose file to add Cloudflare Tunnel to your deployment
+# Run: docker-compose -f docker-compose.yml -f cloudflare/docker-compose.cloudflare.yml up -d
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflare/config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare/credentials.json:/etc/cloudflared/credentials.json:ro
+    depends_on:
+      apigateway:
+        condition: service_healthy
+    networks:
+      - microservices-network
