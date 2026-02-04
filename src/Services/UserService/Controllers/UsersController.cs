@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Shared;
+using System.Security.Cryptography;
+using System.Text;
 using UserService.Data;
 using UserService.Models;
 
@@ -20,80 +22,105 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<IEnumerable<User>>>> GetUsers()
+    public async Task<ActionResult<ApiResponse<IEnumerable<UserResponseDto>>>> GetUsers()
     {
-        var users = await _context.Users.ToListAsync();
-        return Ok(ApiResponse<IEnumerable<User>>.Ok(users));
+        var users = await _context.Users
+            .Select(u => new UserResponseDto
+            {
+                Id = u.Id,
+                Email = u.Email,
+                FirstName = u.FirstName,
+                LastName = u.LastName,
+                IsActive = u.IsActive,
+                EmailVerified = u.EmailVerified,
+                CreatedAt = u.CreatedAt,
+                LastLoginAt = u.LastLoginAt
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<IEnumerable<UserResponseDto>>.Ok(users));
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<ApiResponse<User>>> GetUser(int id)
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> GetUser(int id)
     {
         var user = await _context.Users.FindAsync(id);
 
         if (user == null)
         {
-            return NotFound(ApiResponse<User>.Fail("User not found"));
+            return NotFound(ApiResponse<UserResponseDto>.Fail("User not found"));
         }
 
-        return Ok(ApiResponse<User>.Ok(user));
+        var response = new UserResponseDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            IsActive = user.IsActive,
+            EmailVerified = user.EmailVerified,
+            CreatedAt = user.CreatedAt,
+            LastLoginAt = user.LastLoginAt
+        };
+
+        return Ok(ApiResponse<UserResponseDto>.Ok(response));
     }
 
     [HttpPost]
-    public async Task<ActionResult<ApiResponse<User>>> CreateUser(CreateUserDto dto)
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> CreateUser(CreateUserDto dto)
     {
-        if (await _context.Users.AnyAsync(u => u.Username == dto.Username))
+        if (await _context.Users.AnyAsync(u => u.Email == dto.Email.ToLower()))
         {
-            return BadRequest(ApiResponse<User>.Fail("Username already exists"));
-        }
-
-        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
-        {
-            return BadRequest(ApiResponse<User>.Fail("Email already exists"));
+            return BadRequest(ApiResponse<UserResponseDto>.Fail("Email already exists"));
         }
 
         var user = new User
         {
-            Username = dto.Username,
-            Email = dto.Email,
+            Email = dto.Email.ToLower(),
+            PasswordHash = HashPassword(dto.Password),
             FirstName = dto.FirstName,
-            LastName = dto.LastName
+            LastName = dto.LastName,
+            EmailVerified = true // Admin-created users are pre-verified
         };
 
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Created user {UserId} with username {Username}", user.Id, user.Username);
+        _logger.LogInformation("Created user {UserId} with email {Email}", user.Id, user.Email);
 
-        return CreatedAtAction(nameof(GetUser), new { id = user.Id }, ApiResponse<User>.Ok(user, "User created successfully"));
+        var response = new UserResponseDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            IsActive = user.IsActive,
+            EmailVerified = user.EmailVerified,
+            CreatedAt = user.CreatedAt,
+            LastLoginAt = user.LastLoginAt
+        };
+
+        return CreatedAtAction(nameof(GetUser), new { id = user.Id }, ApiResponse<UserResponseDto>.Ok(response, "User created successfully"));
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<ApiResponse<User>>> UpdateUser(int id, UpdateUserDto dto)
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateUser(int id, UpdateUserDto dto)
     {
         var user = await _context.Users.FindAsync(id);
 
         if (user == null)
         {
-            return NotFound(ApiResponse<User>.Fail("User not found"));
+            return NotFound(ApiResponse<UserResponseDto>.Fail("User not found"));
         }
 
-        if (dto.Username != null && dto.Username != user.Username)
+        if (dto.Email != null && dto.Email.ToLower() != user.Email)
         {
-            if (await _context.Users.AnyAsync(u => u.Username == dto.Username))
+            if (await _context.Users.AnyAsync(u => u.Email == dto.Email.ToLower()))
             {
-                return BadRequest(ApiResponse<User>.Fail("Username already exists"));
+                return BadRequest(ApiResponse<UserResponseDto>.Fail("Email already exists"));
             }
-            user.Username = dto.Username;
-        }
-
-        if (dto.Email != null && dto.Email != user.Email)
-        {
-            if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
-            {
-                return BadRequest(ApiResponse<User>.Fail("Email already exists"));
-            }
-            user.Email = dto.Email;
+            user.Email = dto.Email.ToLower();
+            user.EmailVerified = false; // Require re-verification when email changes
         }
 
         if (dto.FirstName != null) user.FirstName = dto.FirstName;
@@ -106,7 +133,19 @@ public class UsersController : ControllerBase
 
         _logger.LogInformation("Updated user {UserId}", user.Id);
 
-        return Ok(ApiResponse<User>.Ok(user, "User updated successfully"));
+        var response = new UserResponseDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            IsActive = user.IsActive,
+            EmailVerified = user.EmailVerified,
+            CreatedAt = user.CreatedAt,
+            LastLoginAt = user.LastLoginAt
+        };
+
+        return Ok(ApiResponse<UserResponseDto>.Ok(response, "User updated successfully"));
     }
 
     [HttpDelete("{id}")]
@@ -125,5 +164,12 @@ public class UsersController : ControllerBase
         _logger.LogInformation("Deleted user {UserId}", id);
 
         return Ok(ApiResponse<bool>.Ok(true, "User deleted successfully"));
+    }
+
+    private static string HashPassword(string password)
+    {
+        using var sha256 = SHA256.Create();
+        var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password + "MicroservicesDemo_Salt_2024"));
+        return Convert.ToBase64String(hashedBytes);
     }
 }

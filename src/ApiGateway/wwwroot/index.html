@@ -4,69 +4,244 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microservices Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-brand">Microservices Demo</div>
-        <div class="nav-links">
-            <a href="#" class="nav-link active" data-section="users">Users</a>
-            <a href="#" class="nav-link" data-section="products">Products</a>
+    <!-- Auth Container (Login/Register/Forgot Password) -->
+    <div id="auth-container" class="auth-container">
+        <!-- Login Page -->
+        <div id="login-page" class="auth-page active">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>Microservices Demo</h1>
+                    <p>Sign in to your account</p>
+                </div>
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label for="login-email">Email Address</label>
+                        <input type="email" id="login-email" required placeholder="Enter your email">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required placeholder="Enter your password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+                </form>
+                <div class="auth-links">
+                    <a href="#" onclick="showAuthPage('forgot-password')">Forgot Password?</a>
+                    <span class="divider">|</span>
+                    <a href="#" onclick="showAuthPage('register')">Create Account</a>
+                </div>
+            </div>
         </div>
-    </nav>
 
-    <main class="container">
-        <!-- Users Section -->
-        <section id="users-section" class="section active">
-            <div class="section-header">
-                <h2>Users Management</h2>
-                <button class="btn btn-primary" onclick="showUserModal()">+ Add User</button>
+        <!-- Register Page -->
+        <div id="register-page" class="auth-page">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>Create Account</h1>
+                    <p>Sign up for a new account</p>
+                </div>
+                <form id="register-form" onsubmit="handleRegister(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="register-firstName">First Name</label>
+                            <input type="text" id="register-firstName" placeholder="First name">
+                        </div>
+                        <div class="form-group">
+                            <label for="register-lastName">Last Name</label>
+                            <input type="text" id="register-lastName" placeholder="Last name">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email Address *</label>
+                        <input type="email" id="register-email" required placeholder="Enter your email">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password *</label>
+                        <input type="password" id="register-password" required minlength="6" placeholder="Min 6 characters">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-confirm">Confirm Password *</label>
+                        <input type="password" id="register-confirm" required placeholder="Confirm password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+                </form>
+                <div class="auth-links">
+                    <a href="#" onclick="showAuthPage('login')">Already have an account? Sign In</a>
+                </div>
             </div>
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Name</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body">
-                        <tr><td colspan="6" class="loading">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+        </div>
 
-        <!-- Products Section -->
-        <section id="products-section" class="section">
-            <div class="section-header">
-                <h2>Products Management</h2>
-                <button class="btn btn-primary" onclick="showProductModal()">+ Add Product</button>
+        <!-- Forgot Password Page -->
+        <div id="forgot-password-page" class="auth-page">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>Forgot Password</h1>
+                    <p>Enter your email to receive a reset token</p>
+                </div>
+                <form id="forgot-form" onsubmit="handleForgotPassword(event)">
+                    <div class="form-group">
+                        <label for="forgot-email">Email Address</label>
+                        <input type="email" id="forgot-email" required placeholder="Enter your email">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Send Reset Token</button>
+                </form>
+                <div id="reset-token-display" class="token-display" style="display: none;">
+                    <p>Your reset token:</p>
+                    <code id="reset-token-value"></code>
+                    <button class="btn btn-secondary btn-sm" onclick="showAuthPage('reset-password')">Reset Password</button>
+                </div>
+                <div class="auth-links">
+                    <a href="#" onclick="showAuthPage('login')">Back to Sign In</a>
+                </div>
             </div>
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>SKU</th>
-                            <th>Price</th>
-                            <th>Stock</th>
-                            <th>Category</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="products-table-body">
-                        <tr><td colspan="7" class="loading">Loading...</td></tr>
-                    </tbody>
-                </table>
+        </div>
+
+        <!-- Reset Password Page -->
+        <div id="reset-password-page" class="auth-page">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>Reset Password</h1>
+                    <p>Enter your reset token and new password</p>
+                </div>
+                <form id="reset-form" onsubmit="handleResetPassword(event)">
+                    <div class="form-group">
+                        <label for="reset-token">Reset Token *</label>
+                        <input type="text" id="reset-token" required placeholder="Paste your reset token">
+                    </div>
+                    <div class="form-group">
+                        <label for="reset-password">New Password *</label>
+                        <input type="password" id="reset-password" required minlength="6" placeholder="Min 6 characters">
+                    </div>
+                    <div class="form-group">
+                        <label for="reset-confirm">Confirm Password *</label>
+                        <input type="password" id="reset-confirm" required placeholder="Confirm password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
+                </form>
+                <div class="auth-links">
+                    <a href="#" onclick="showAuthPage('login')">Back to Sign In</a>
+                </div>
             </div>
-        </section>
-    </main>
+        </div>
+
+        <!-- Verify Email Page -->
+        <div id="verify-email-page" class="auth-page">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>Verify Email</h1>
+                    <p>Enter your verification token</p>
+                </div>
+                <form id="verify-form" onsubmit="handleVerifyEmail(event)">
+                    <div class="form-group">
+                        <label for="verify-token">Verification Token *</label>
+                        <input type="text" id="verify-token" required placeholder="Paste your verification token">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Verify Email</button>
+                </form>
+                <div class="auth-links">
+                    <a href="#" onclick="showAuthPage('login')">Back to Sign In</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container (shown after login) -->
+    <div id="app-container" class="app-container" style="display: none;">
+        <nav class="navbar">
+            <div class="nav-brand">Microservices Demo</div>
+            <div class="nav-links">
+                <a href="#" class="nav-link active" data-section="users">Users</a>
+                <a href="#" class="nav-link" data-section="products">Products</a>
+                <a href="#" class="nav-link" data-section="activity">Login Activity</a>
+            </div>
+            <div class="user-menu">
+                <span id="user-display"></span>
+                <button class="btn btn-secondary btn-sm" onclick="handleLogout()">Logout</button>
+            </div>
+        </nav>
+
+        <main class="container">
+            <!-- Users Section -->
+            <section id="users-section" class="section active">
+                <div class="section-header">
+                    <h2>Users Management</h2>
+                    <button class="btn btn-primary" onclick="showUserModal()">+ Add User</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Email</th>
+                                <th>Name</th>
+                                <th>Verified</th>
+                                <th>Status</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <tr><td colspan="7" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Products Section -->
+            <section id="products-section" class="section">
+                <div class="section-header">
+                    <h2>Products Management</h2>
+                    <button class="btn btn-primary" onclick="showProductModal()">+ Add Product</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>SKU</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Category</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="products-table-body">
+                            <tr><td colspan="7" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Login Activity Section -->
+            <section id="activity-section" class="section">
+                <div class="section-header">
+                    <h2>My Login Activity</h2>
+                    <button class="btn btn-secondary" onclick="loadLoginActivity()">Refresh</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>IP Address</th>
+                                <th>Browser/Device</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-table-body">
+                            <tr><td colspan="4" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
 
     <!-- User Modal -->
     <div id="user-modal" class="modal">
@@ -78,12 +253,13 @@
             <form id="user-form" onsubmit="saveUser(event)">
                 <input type="hidden" id="user-id">
                 <div class="form-group">
-                    <label for="username">Username *</label>
-                    <input type="text" id="username" required maxlength="100">
-                </div>
-                <div class="form-group">
                     <label for="email">Email *</label>
                     <input type="email" id="email" required maxlength="255">
+                </div>
+                <div class="form-group" id="password-group">
+                    <label for="password">Password *</label>
+                    <input type="password" id="password" minlength="6">
+                    <small>Leave blank to keep existing password (edit mode)</small>
                 </div>
                 <div class="form-group">
                     <label for="firstName">First Name</label>

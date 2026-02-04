@@ -1,6 +1,194 @@
 const API_BASE = '';
 
-// Navigation
+// Current user state
+let currentUser = null;
+
+// ============ AUTH FUNCTIONS ============
+
+function showAuthPage(page) {
+    document.querySelectorAll('.auth-page').forEach(p => p.classList.remove('active'));
+    document.getElementById(`${page}-page`).classList.add('active');
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            currentUser = result.data;
+            localStorage.setItem('user', JSON.stringify(currentUser));
+            showApp();
+            showToast('Login successful!');
+        } else {
+            showToast(result.message || 'Login failed', 'error');
+        }
+    } catch (error) {
+        showToast('Error connecting to server', 'error');
+    }
+}
+
+async function handleRegister(event) {
+    event.preventDefault();
+
+    const password = document.getElementById('register-password').value;
+    const confirm = document.getElementById('register-confirm').value;
+
+    if (password !== confirm) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+
+    const data = {
+        email: document.getElementById('register-email').value,
+        password: password,
+        confirmPassword: confirm,
+        firstName: document.getElementById('register-firstName').value || null,
+        lastName: document.getElementById('register-lastName').value || null
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Registration successful! Please sign in.', 'success');
+            // Show verification token info
+            if (result.data && result.data.token) {
+                alert(`Registration successful!\n\nVerification Token (for demo):\n${result.data.token}\n\nYou can now sign in.`);
+            }
+            showAuthPage('login');
+            document.getElementById('login-email').value = data.email;
+        } else {
+            showToast(result.message || 'Registration failed', 'error');
+        }
+    } catch (error) {
+        showToast('Error connecting to server', 'error');
+    }
+}
+
+async function handleForgotPassword(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('forgot-email').value;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Reset token generated!', 'success');
+            if (result.data) {
+                document.getElementById('reset-token-value').textContent = result.data;
+                document.getElementById('reset-token-display').style.display = 'block';
+            }
+        } else {
+            showToast(result.message || 'Error', 'error');
+        }
+    } catch (error) {
+        showToast('Error connecting to server', 'error');
+    }
+}
+
+async function handleResetPassword(event) {
+    event.preventDefault();
+
+    const password = document.getElementById('reset-password').value;
+    const confirm = document.getElementById('reset-confirm').value;
+
+    if (password !== confirm) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+
+    const data = {
+        token: document.getElementById('reset-token').value,
+        newPassword: password,
+        confirmPassword: confirm
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Password reset successful! Please sign in.', 'success');
+            showAuthPage('login');
+        } else {
+            showToast(result.message || 'Reset failed', 'error');
+        }
+    } catch (error) {
+        showToast('Error connecting to server', 'error');
+    }
+}
+
+async function handleVerifyEmail(event) {
+    event.preventDefault();
+
+    const token = document.getElementById('verify-token').value;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/verify-email?token=${encodeURIComponent(token)}`);
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Email verified successfully!', 'success');
+            showAuthPage('login');
+        } else {
+            showToast(result.message || 'Verification failed', 'error');
+        }
+    } catch (error) {
+        showToast('Error connecting to server', 'error');
+    }
+}
+
+function handleLogout() {
+    currentUser = null;
+    localStorage.removeItem('user');
+    showAuth();
+    showToast('Logged out successfully');
+}
+
+function showApp() {
+    document.getElementById('auth-container').style.display = 'none';
+    document.getElementById('app-container').style.display = 'block';
+    document.getElementById('user-display').textContent = currentUser.email;
+    loadUsers();
+}
+
+function showAuth() {
+    document.getElementById('auth-container').style.display = 'flex';
+    document.getElementById('app-container').style.display = 'none';
+    showAuthPage('login');
+}
+
+// ============ NAVIGATION ============
+
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -14,10 +202,12 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
         if (section === 'users') loadUsers();
         if (section === 'products') loadProducts();
+        if (section === 'activity') loadLoginActivity();
     });
 });
 
-// Toast notification
+// ============ TOAST ============
+
 function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
@@ -29,7 +219,7 @@ function showToast(message, type = 'success') {
 
 async function loadUsers() {
     const tbody = document.getElementById('users-table-body');
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
 
     try {
         const response = await fetch(`${API_BASE}/api/users`);
@@ -39,10 +229,11 @@ async function loadUsers() {
             tbody.innerHTML = result.data.map(user => `
                 <tr>
                     <td>${user.id}</td>
-                    <td>${user.username}</td>
                     <td>${user.email}</td>
                     <td>${user.firstName || ''} ${user.lastName || ''}</td>
+                    <td><span class="status-${user.emailVerified ? 'verified' : 'unverified'}">${user.emailVerified ? 'Verified' : 'Unverified'}</span></td>
                     <td><span class="status-${user.isActive ? 'active' : 'inactive'}">${user.isActive ? 'Active' : 'Inactive'}</span></td>
+                    <td>${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Never'}</td>
                     <td class="actions">
                         <button class="btn btn-secondary btn-sm" onclick="editUser(${user.id})">Edit</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">Delete</button>
@@ -50,10 +241,10 @@ async function loadUsers() {
                 </tr>
             `).join('');
         } else {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading">No users found. Add one!</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">No users found. Add one!</td></tr>';
         }
     } catch (error) {
-        tbody.innerHTML = '<tr><td colspan="6" class="loading">Error loading users</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">Error loading users</td></tr>';
         showToast('Error loading users', 'error');
     }
 }
@@ -62,6 +253,8 @@ function showUserModal(user = null) {
     const modal = document.getElementById('user-modal');
     const title = document.getElementById('user-modal-title');
     const form = document.getElementById('user-form');
+    const passwordGroup = document.getElementById('password-group');
+    const passwordInput = document.getElementById('password');
 
     form.reset();
     document.getElementById('user-id').value = '';
@@ -69,12 +262,15 @@ function showUserModal(user = null) {
     if (user) {
         title.textContent = 'Edit User';
         document.getElementById('user-id').value = user.id;
-        document.getElementById('username').value = user.username;
         document.getElementById('email').value = user.email;
         document.getElementById('firstName').value = user.firstName || '';
         document.getElementById('lastName').value = user.lastName || '';
+        passwordInput.required = false;
+        passwordGroup.querySelector('small').style.display = 'block';
     } else {
         title.textContent = 'Add User';
+        passwordInput.required = true;
+        passwordGroup.querySelector('small').style.display = 'none';
     }
 
     modal.classList.add('active');
@@ -100,12 +296,18 @@ async function saveUser(event) {
     event.preventDefault();
 
     const id = document.getElementById('user-id').value;
+    const password = document.getElementById('password').value;
+
     const data = {
-        username: document.getElementById('username').value,
         email: document.getElementById('email').value,
         firstName: document.getElementById('firstName').value || null,
         lastName: document.getElementById('lastName').value || null
     };
+
+    // Only include password for new users or if password field has value
+    if (!id || password) {
+        data.password = password;
+    }
 
     try {
         const url = id ? `${API_BASE}/api/users/${id}` : `${API_BASE}/api/users`;
@@ -280,5 +482,56 @@ async function deleteProduct(id) {
     }
 }
 
-// Initial load
-loadUsers();
+// ============ LOGIN ACTIVITY ============
+
+async function loadLoginActivity() {
+    const tbody = document.getElementById('activity-table-body');
+    tbody.innerHTML = '<tr><td colspan="4" class="loading">Loading...</td></tr>';
+
+    if (!currentUser) {
+        tbody.innerHTML = '<tr><td colspan="4" class="loading">Please log in to view activity</td></tr>';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/login-activity/${currentUser.userId}`);
+        const result = await response.json();
+
+        if (result.success && result.data.length > 0) {
+            tbody.innerHTML = result.data.map(activity => `
+                <tr>
+                    <td>${new Date(activity.loginTime).toLocaleString()}</td>
+                    <td>${activity.ipAddress || 'Unknown'}</td>
+                    <td>${truncate(activity.userAgent, 50) || 'Unknown'}</td>
+                    <td><span class="status-${activity.isSuccessful ? 'success' : 'failed'}">${activity.isSuccessful ? 'Success' : 'Failed'}</span></td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="loading">No login activity found</td></tr>';
+        }
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="4" class="loading">Error loading activity</td></tr>';
+        showToast('Error loading login activity', 'error');
+    }
+}
+
+function truncate(str, length) {
+    if (!str) return '';
+    return str.length > length ? str.substring(0, length) + '...' : str;
+}
+
+// ============ INITIALIZATION ============
+
+// Check for saved user on page load
+const savedUser = localStorage.getItem('user');
+if (savedUser) {
+    try {
+        currentUser = JSON.parse(savedUser);
+        showApp();
+    } catch (e) {
+        localStorage.removeItem('user');
+        showAuth();
+    }
+} else {
+    showAuth();
+}
