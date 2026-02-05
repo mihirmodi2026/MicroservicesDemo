@@ -22,8 +22,16 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<IEnumerable<UserResponseDto>>>> GetUsers()
+    public async Task<ActionResult<ApiResponse<IEnumerable<UserResponseDto>>>> GetUsers([FromHeader(Name = "X-User-Id")] int? requestUserId)
     {
+        var requestingUser = requestUserId.HasValue ? await _context.Users.FindAsync(requestUserId.Value) : null;
+
+        // Only admins or users with ViewUsers permission can see all users
+        if (requestingUser == null || (!requestingUser.HasPermission(Permission.ViewUsers) && requestingUser.Role != UserRole.Admin))
+        {
+            return Unauthorized(ApiResponse<IEnumerable<UserResponseDto>>.Fail("Permission denied. You need ViewUsers permission."));
+        }
+
         var users = await _context.Users
             .Select(u => new UserResponseDto
             {
@@ -33,6 +41,8 @@ public class UsersController : ControllerBase
                 LastName = u.LastName,
                 IsActive = u.IsActive,
                 EmailVerified = u.EmailVerified,
+                Role = u.Role,
+                Permissions = u.Permissions,
                 CreatedAt = u.CreatedAt,
                 LastLoginAt = u.LastLoginAt
             })
@@ -42,8 +52,16 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<ApiResponse<UserResponseDto>>> GetUser(int id)
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> GetUser(int id, [FromHeader(Name = "X-User-Id")] int? requestUserId)
     {
+        var requestingUser = requestUserId.HasValue ? await _context.Users.FindAsync(requestUserId.Value) : null;
+
+        // Users can view their own profile, admins/users with ViewUsers can view any
+        if (requestingUser == null || (requestUserId != id && !requestingUser.HasPermission(Permission.ViewUsers) && requestingUser.Role != UserRole.Admin))
+        {
+            return Unauthorized(ApiResponse<UserResponseDto>.Fail("Permission denied"));
+        }
+
         var user = await _context.Users.FindAsync(id);
 
         if (user == null)
@@ -59,6 +77,8 @@ public class UsersController : ControllerBase
             LastName = user.LastName,
             IsActive = user.IsActive,
             EmailVerified = user.EmailVerified,
+            Role = user.Role,
+            Permissions = user.Permissions,
             CreatedAt = user.CreatedAt,
             LastLoginAt = user.LastLoginAt
         };
@@ -67,8 +87,16 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<ApiResponse<UserResponseDto>>> CreateUser(CreateUserDto dto)
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> CreateUser(CreateUserDto dto, [FromHeader(Name = "X-User-Id")] int? requestUserId)
     {
+        var requestingUser = requestUserId.HasValue ? await _context.Users.FindAsync(requestUserId.Value) : null;
+
+        // Only admins or users with EditUsers permission can create users
+        if (requestingUser == null || (!requestingUser.HasPermission(Permission.EditUsers) && requestingUser.Role != UserRole.Admin))
+        {
+            return Unauthorized(ApiResponse<UserResponseDto>.Fail("Permission denied. You need EditUsers permission."));
+        }
+
         if (await _context.Users.AnyAsync(u => u.Email == dto.Email.ToLower()))
         {
             return BadRequest(ApiResponse<UserResponseDto>.Fail("Email already exists"));
@@ -80,13 +108,15 @@ public class UsersController : ControllerBase
             PasswordHash = HashPassword(dto.Password),
             FirstName = dto.FirstName,
             LastName = dto.LastName,
-            EmailVerified = true // Admin-created users are pre-verified
+            EmailVerified = true, // Admin-created users are pre-verified
+            Role = dto.Role,
+            Permissions = Permission.None
         };
 
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Created user {UserId} with email {Email}", user.Id, user.Email);
+        _logger.LogInformation("Created user {UserId} with email {Email} by admin {AdminId}", user.Id, user.Email, requestUserId);
 
         var response = new UserResponseDto
         {
@@ -96,6 +126,8 @@ public class UsersController : ControllerBase
             LastName = user.LastName,
             IsActive = user.IsActive,
             EmailVerified = user.EmailVerified,
+            Role = user.Role,
+            Permissions = user.Permissions,
             CreatedAt = user.CreatedAt,
             LastLoginAt = user.LastLoginAt
         };
@@ -104,8 +136,19 @@ public class UsersController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateUser(int id, UpdateUserDto dto)
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateUser(int id, UpdateUserDto dto, [FromHeader(Name = "X-User-Id")] int? requestUserId)
     {
+        var requestingUser = requestUserId.HasValue ? await _context.Users.FindAsync(requestUserId.Value) : null;
+
+        // Users can edit their own profile (limited), admins/users with EditUsers can edit any
+        bool isSelfEdit = requestUserId == id;
+        bool hasEditPermission = requestingUser?.HasPermission(Permission.EditUsers) == true || requestingUser?.Role == UserRole.Admin;
+
+        if (requestingUser == null || (!isSelfEdit && !hasEditPermission))
+        {
+            return Unauthorized(ApiResponse<UserResponseDto>.Fail("Permission denied. You need EditUsers permission."));
+        }
+
         var user = await _context.Users.FindAsync(id);
 
         if (user == null)
@@ -113,25 +156,37 @@ public class UsersController : ControllerBase
             return NotFound(ApiResponse<UserResponseDto>.Fail("User not found"));
         }
 
-        if (dto.Email != null && dto.Email.ToLower() != user.Email)
+        // Regular users can only edit their own name
+        if (isSelfEdit && !hasEditPermission)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == dto.Email.ToLower()))
-            {
-                return BadRequest(ApiResponse<UserResponseDto>.Fail("Email already exists"));
-            }
-            user.Email = dto.Email.ToLower();
-            user.EmailVerified = false; // Require re-verification when email changes
+            if (dto.FirstName != null) user.FirstName = dto.FirstName;
+            if (dto.LastName != null) user.LastName = dto.LastName;
         }
+        else
+        {
+            // Admins can edit everything
+            if (dto.Email != null && dto.Email.ToLower() != user.Email)
+            {
+                if (await _context.Users.AnyAsync(u => u.Email == dto.Email.ToLower()))
+                {
+                    return BadRequest(ApiResponse<UserResponseDto>.Fail("Email already exists"));
+                }
+                user.Email = dto.Email.ToLower();
+                user.EmailVerified = false;
+            }
 
-        if (dto.FirstName != null) user.FirstName = dto.FirstName;
-        if (dto.LastName != null) user.LastName = dto.LastName;
-        if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
+            if (dto.FirstName != null) user.FirstName = dto.FirstName;
+            if (dto.LastName != null) user.LastName = dto.LastName;
+            if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
+            if (dto.Role.HasValue) user.Role = dto.Role.Value;
+            if (dto.Permissions.HasValue) user.Permissions = dto.Permissions.Value;
+        }
 
         user.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Updated user {UserId}", user.Id);
+        _logger.LogInformation("Updated user {UserId} by {RequesterId}", user.Id, requestUserId);
 
         var response = new UserResponseDto
         {
@@ -141,6 +196,8 @@ public class UsersController : ControllerBase
             LastName = user.LastName,
             IsActive = user.IsActive,
             EmailVerified = user.EmailVerified,
+            Role = user.Role,
+            Permissions = user.Permissions,
             CreatedAt = user.CreatedAt,
             LastLoginAt = user.LastLoginAt
         };
@@ -149,8 +206,22 @@ public class UsersController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult<ApiResponse<bool>>> DeleteUser(int id)
+    public async Task<ActionResult<ApiResponse<bool>>> DeleteUser(int id, [FromHeader(Name = "X-User-Id")] int? requestUserId)
     {
+        var requestingUser = requestUserId.HasValue ? await _context.Users.FindAsync(requestUserId.Value) : null;
+
+        // Only admins or users with DeleteUsers permission can delete users
+        if (requestingUser == null || (!requestingUser.HasPermission(Permission.DeleteUsers) && requestingUser.Role != UserRole.Admin))
+        {
+            return Unauthorized(ApiResponse<bool>.Fail("Permission denied. You need DeleteUsers permission."));
+        }
+
+        // Cannot delete yourself
+        if (requestUserId == id)
+        {
+            return BadRequest(ApiResponse<bool>.Fail("You cannot delete your own account"));
+        }
+
         var user = await _context.Users.FindAsync(id);
 
         if (user == null)
@@ -161,7 +232,7 @@ public class UsersController : ControllerBase
         _context.Users.Remove(user);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Deleted user {UserId}", id);
+        _logger.LogInformation("Deleted user {UserId} by admin {AdminId}", id, requestUserId);
 
         return Ok(ApiResponse<bool>.Ok(true, "User deleted successfully"));
     }

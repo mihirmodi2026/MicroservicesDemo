@@ -49,6 +49,13 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=userdb;Username=postgres;Password=postgres123
+      - Email__SmtpHost=smtp.gmail.com
+      - Email__SmtpPort=587
+      - Email__SmtpUser=${SMTP_USER}
+      - Email__SmtpPass=${SMTP_PASS}
+      - Email__FromEmail=${SMTP_USER}
+      - Email__FromName=Microservices Demo
+      - App__BaseUrl=${APP_BASE_URL:-https://api.microservicedemo.org}
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +76,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - microservices-network
+
+  # pgAdmin - Database Management UI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - ./pgadmin/servers.json:/pgadmin4/servers.json
+    depends_on:
+      - postgres
     networks:
       - microservices-network
 

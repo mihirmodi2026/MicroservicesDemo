@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using UserService.Data;
 using UserService.Models;
+using UserService.Services;
 
 namespace UserService.Controllers;
 
@@ -14,11 +15,15 @@ public class AuthController : ControllerBase
 {
     private readonly UserDbContext _context;
     private readonly ILogger<AuthController> _logger;
+    private readonly IEmailService _emailService;
+    private readonly IConfiguration _config;
 
-    public AuthController(UserDbContext context, ILogger<AuthController> logger)
+    public AuthController(UserDbContext context, ILogger<AuthController> logger, IEmailService emailService, IConfiguration config)
     {
         _context = context;
         _logger = logger;
+        _emailService = emailService;
+        _config = config;
     }
 
     [HttpPost("register")]
@@ -30,6 +35,7 @@ public class AuthController : ControllerBase
         }
 
         var verificationToken = GenerateToken();
+        var isFirstUser = !await _context.Users.AnyAsync();
 
         var user = new User
         {
@@ -38,16 +44,30 @@ public class AuthController : ControllerBase
             FirstName = dto.FirstName,
             LastName = dto.LastName,
             EmailVerificationToken = verificationToken,
-            EmailVerified = false
+            EmailVerificationExpiry = DateTime.UtcNow.AddHours(24),
+            EmailVerified = false,
+            Role = isFirstUser ? UserRole.Admin : UserRole.User,
+            Permissions = isFirstUser ? Permission.All : Permission.None
         };
 
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("New user registered: {Email}", user.Email);
+        // Send verification email
+        var baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5000";
+        var verificationLink = $"{baseUrl}?verify={verificationToken}";
 
-        // In production, send verification email here
-        // For demo, we'll include the token in response
+        try
+        {
+            await _emailService.SendVerificationEmailAsync(user.Email, user.FirstName, verificationLink);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send verification email");
+        }
+
+        _logger.LogInformation("New user registered: {Email} (Role: {Role})", user.Email, user.Role);
+
         var response = new AuthResponse
         {
             UserId = user.Id,
@@ -55,10 +75,15 @@ public class AuthController : ControllerBase
             FirstName = user.FirstName,
             LastName = user.LastName,
             EmailVerified = user.EmailVerified,
-            Token = verificationToken // In production, this would be a JWT
+            Role = user.Role,
+            Permissions = user.Permissions
         };
 
-        return Ok(ApiResponse<AuthResponse>.Ok(response, $"Registration successful. Verification token: {verificationToken}"));
+        var message = isFirstUser
+            ? "Registration successful! You are the first user and have been granted Admin access. Please check your email to verify your account."
+            : "Registration successful! Please check your email to verify your account.";
+
+        return Ok(ApiResponse<AuthResponse>.Ok(response, message));
     }
 
     [HttpPost("login")]
@@ -87,7 +112,12 @@ public class AuthController : ControllerBase
             return Unauthorized(ApiResponse<AuthResponse>.Fail("Account is deactivated"));
         }
 
-        // Update last login
+        if (!user.EmailVerified)
+        {
+            await LogLoginAttempt(user.Id, ipAddress, userAgent, false, "Email not verified");
+            return Unauthorized(ApiResponse<AuthResponse>.Fail("Please verify your email before logging in"));
+        }
+
         user.LastLoginAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
@@ -102,32 +132,42 @@ public class AuthController : ControllerBase
             FirstName = user.FirstName,
             LastName = user.LastName,
             EmailVerified = user.EmailVerified,
-            Token = GenerateToken() // In production, this would be a JWT
+            Role = user.Role,
+            Permissions = user.Permissions
         };
 
         return Ok(ApiResponse<AuthResponse>.Ok(response, "Login successful"));
     }
 
     [HttpPost("forgot-password")]
-    public async Task<ActionResult<ApiResponse<string>>> ForgotPassword(ForgotPasswordDto dto)
+    public async Task<ActionResult<ApiResponse<bool>>> ForgotPassword(ForgotPasswordDto dto)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email.ToLower());
 
         if (user == null)
         {
-            // Return success even if user not found (security best practice)
-            return Ok(ApiResponse<string>.Ok(null, "If the email exists, a password reset link has been sent"));
+            return Ok(ApiResponse<bool>.Ok(true, "If the email exists, a password reset link has been sent"));
         }
 
         user.PasswordResetToken = GenerateToken();
         user.PasswordResetExpiry = DateTime.UtcNow.AddHours(1);
         await _context.SaveChangesAsync();
 
+        var baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5000";
+        var resetLink = $"{baseUrl}?reset={user.PasswordResetToken}";
+
+        try
+        {
+            await _emailService.SendPasswordResetEmailAsync(user.Email, user.FirstName, resetLink);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send password reset email");
+        }
+
         _logger.LogInformation("Password reset requested for: {Email}", user.Email);
 
-        // In production, send email with reset link
-        // For demo, return the token
-        return Ok(ApiResponse<string>.Ok(user.PasswordResetToken, $"Password reset token (valid for 1 hour): {user.PasswordResetToken}"));
+        return Ok(ApiResponse<bool>.Ok(true, "If the email exists, a password reset link has been sent"));
     }
 
     [HttpPost("reset-password")]
@@ -156,43 +196,58 @@ public class AuthController : ControllerBase
     [HttpGet("verify-email")]
     public async Task<ActionResult<ApiResponse<bool>>> VerifyEmail([FromQuery] string token)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.EmailVerificationToken == token);
+        var user = await _context.Users.FirstOrDefaultAsync(u =>
+            u.EmailVerificationToken == token &&
+            u.EmailVerificationExpiry > DateTime.UtcNow);
 
         if (user == null)
         {
-            return BadRequest(ApiResponse<bool>.Fail("Invalid verification token"));
+            return BadRequest(ApiResponse<bool>.Fail("Invalid or expired verification token"));
         }
 
         user.EmailVerified = true;
         user.EmailVerificationToken = null;
+        user.EmailVerificationExpiry = null;
         user.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Email verified for: {Email}", user.Email);
 
-        return Ok(ApiResponse<bool>.Ok(true, "Email verified successfully"));
+        return Ok(ApiResponse<bool>.Ok(true, "Email verified successfully! You can now log in."));
     }
 
     [HttpPost("resend-verification")]
-    public async Task<ActionResult<ApiResponse<string>>> ResendVerification(ForgotPasswordDto dto)
+    public async Task<ActionResult<ApiResponse<bool>>> ResendVerification(ForgotPasswordDto dto)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email.ToLower());
 
         if (user == null)
         {
-            return Ok(ApiResponse<string>.Ok(null, "If the email exists, a verification link has been sent"));
+            return Ok(ApiResponse<bool>.Ok(true, "If the email exists, a verification link has been sent"));
         }
 
         if (user.EmailVerified)
         {
-            return BadRequest(ApiResponse<string>.Fail("Email is already verified"));
+            return BadRequest(ApiResponse<bool>.Fail("Email is already verified"));
         }
 
         user.EmailVerificationToken = GenerateToken();
+        user.EmailVerificationExpiry = DateTime.UtcNow.AddHours(24);
         await _context.SaveChangesAsync();
 
-        // In production, send verification email
-        return Ok(ApiResponse<string>.Ok(user.EmailVerificationToken, $"Verification token: {user.EmailVerificationToken}"));
+        var baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5000";
+        var verificationLink = $"{baseUrl}?verify={user.EmailVerificationToken}";
+
+        try
+        {
+            await _emailService.SendVerificationEmailAsync(user.Email, user.FirstName, verificationLink);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send verification email");
+        }
+
+        return Ok(ApiResponse<bool>.Ok(true, "Verification email has been sent"));
     }
 
     [HttpGet("login-activity/{userId}")]
@@ -229,6 +284,57 @@ public class AuthController : ControllerBase
         _logger.LogInformation("Password changed for user: {UserId}", userId);
 
         return Ok(ApiResponse<bool>.Ok(true, "Password changed successfully"));
+    }
+
+    // Admin-only: Update user permissions
+    [HttpPost("update-permissions")]
+    public async Task<ActionResult<ApiResponse<bool>>> UpdatePermissions([FromHeader(Name = "X-User-Id")] int adminUserId, UpdatePermissionsDto dto)
+    {
+        var admin = await _context.Users.FindAsync(adminUserId);
+        if (admin == null || admin.Role != UserRole.Admin)
+        {
+            return Unauthorized(ApiResponse<bool>.Fail("Admin access required"));
+        }
+
+        var user = await _context.Users.FindAsync(dto.UserId);
+        if (user == null)
+        {
+            return NotFound(ApiResponse<bool>.Fail("User not found"));
+        }
+
+        user.Permissions = dto.Permissions;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Permissions updated for user {UserId} by admin {AdminId}", dto.UserId, adminUserId);
+
+        return Ok(ApiResponse<bool>.Ok(true, "Permissions updated successfully"));
+    }
+
+    // Admin-only: Make user admin
+    [HttpPost("make-admin/{userId}")]
+    public async Task<ActionResult<ApiResponse<bool>>> MakeAdmin([FromHeader(Name = "X-User-Id")] int adminUserId, int userId)
+    {
+        var admin = await _context.Users.FindAsync(adminUserId);
+        if (admin == null || admin.Role != UserRole.Admin)
+        {
+            return Unauthorized(ApiResponse<bool>.Fail("Admin access required"));
+        }
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            return NotFound(ApiResponse<bool>.Fail("User not found"));
+        }
+
+        user.Role = UserRole.Admin;
+        user.Permissions = Permission.All;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserId} promoted to Admin by {AdminId}", userId, adminUserId);
+
+        return Ok(ApiResponse<bool>.Ok(true, "User is now an Admin"));
     }
 
     private async Task LogLoginAttempt(int? userId, string? ipAddress, string? userAgent, bool isSuccessful, string? failureReason)

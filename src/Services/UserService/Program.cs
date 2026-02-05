@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using UserService.Data;
+using UserService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,9 @@ builder.Services.AddSwaggerGen();
 // Add DbContext with PostgreSQL
 builder.Services.AddDbContext<UserDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Add Email Service
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Add health checks
 builder.Services.AddHealthChecks()
