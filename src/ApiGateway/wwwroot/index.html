@@ -81,20 +81,15 @@
             <div class="auth-card">
                 <div class="auth-header">
                     <h1>Forgot Password</h1>
-                    <p>Enter your email to receive a reset token</p>
+                    <p>Enter your email to receive a password reset link</p>
                 </div>
                 <form id="forgot-form" onsubmit="handleForgotPassword(event)">
                     <div class="form-group">
                         <label for="forgot-email">Email Address</label>
                         <input type="email" id="forgot-email" required placeholder="Enter your email">
                     </div>
-                    <button type="submit" class="btn btn-primary btn-block">Send Reset Token</button>
+                    <button type="submit" class="btn btn-primary btn-block">Send Reset Link</button>
                 </form>
-                <div id="reset-token-display" class="token-display" style="display: none;">
-                    <p>Your reset token:</p>
-                    <code id="reset-token-value"></code>
-                    <button class="btn btn-secondary btn-sm" onclick="showAuthPage('reset-password')">Reset Password</button>
-                </div>
                 <div class="auth-links">
                     <a href="#" onclick="showAuthPage('login')">Back to Sign In</a>
                 </div>
@@ -106,13 +101,10 @@
             <div class="auth-card">
                 <div class="auth-header">
                     <h1>Reset Password</h1>
-                    <p>Enter your reset token and new password</p>
+                    <p>Enter your new password</p>
                 </div>
                 <form id="reset-form" onsubmit="handleResetPassword(event)">
-                    <div class="form-group">
-                        <label for="reset-token">Reset Token *</label>
-                        <input type="text" id="reset-token" required placeholder="Paste your reset token">
-                    </div>
+                    <input type="hidden" id="reset-token">
                     <div class="form-group">
                         <label for="reset-password">New Password *</label>
                         <input type="password" id="reset-password" required minlength="6" placeholder="Min 6 characters">

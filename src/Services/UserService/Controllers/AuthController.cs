@@ -53,18 +53,23 @@ public class AuthController : ControllerBase
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        // Send verification email
+        // Send verification email in background (fire-and-forget for fast response)
         var baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5000";
         var verificationLink = $"{baseUrl}?verify={verificationToken}";
+        var userEmail = user.Email;
+        var userFirstName = user.FirstName;
 
-        try
+        _ = Task.Run(async () =>
         {
-            await _emailService.SendVerificationEmailAsync(user.Email, user.FirstName, verificationLink);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send verification email");
-        }
+            try
+            {
+                await _emailService.SendVerificationEmailAsync(userEmail, userFirstName, verificationLink);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send verification email to {Email}", userEmail);
+            }
+        });
 
         _logger.LogInformation("New user registered: {Email} (Role: {Role})", user.Email, user.Role);
 
@@ -155,15 +160,21 @@ public class AuthController : ControllerBase
 
         var baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5000";
         var resetLink = $"{baseUrl}?reset={user.PasswordResetToken}";
+        var userEmail = user.Email;
+        var userFirstName = user.FirstName;
 
-        try
+        // Send email in background for fast response
+        _ = Task.Run(async () =>
         {
-            await _emailService.SendPasswordResetEmailAsync(user.Email, user.FirstName, resetLink);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send password reset email");
-        }
+            try
+            {
+                await _emailService.SendPasswordResetEmailAsync(userEmail, userFirstName, resetLink);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset email to {Email}", userEmail);
+            }
+        });
 
         _logger.LogInformation("Password reset requested for: {Email}", user.Email);
 
@@ -237,15 +248,21 @@ public class AuthController : ControllerBase
 
         var baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5000";
         var verificationLink = $"{baseUrl}?verify={user.EmailVerificationToken}";
+        var userEmail = user.Email;
+        var userFirstName = user.FirstName;
 
-        try
+        // Send email in background for fast response
+        _ = Task.Run(async () =>
         {
-            await _emailService.SendVerificationEmailAsync(user.Email, user.FirstName, verificationLink);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send verification email");
-        }
+            try
+            {
+                await _emailService.SendVerificationEmailAsync(userEmail, userFirstName, verificationLink);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send verification email to {Email}", userEmail);
+            }
+        });
 
         return Ok(ApiResponse<bool>.Ok(true, "Verification email has been sent"));
     }
