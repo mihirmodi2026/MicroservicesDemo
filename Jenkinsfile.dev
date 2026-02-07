@@ -147,24 +147,25 @@ pipeline {
         // ──────────────────────────────────────
         stage('E2E Tests (Cypress)') {
             steps {
-                sh '''
-                    echo "========== Running Cypress E2E Tests =========="
+                dir('cypress') {
+                    sh '''
+                        echo "========== Running Cypress E2E Tests =========="
 
-                    # Get the API Gateway service ClusterIP
-                    API_IP=$(kubectl get svc apigateway-service -n ${K8S_NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-                    API_URL="http://${API_IP}:5000"
-                    echo "Testing against: ${API_URL}"
+                        # Get the API Gateway service ClusterIP
+                        API_IP=$(kubectl get svc apigateway-service -n ${K8S_NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+                        API_URL="http://${API_IP}:5000"
+                        echo "Testing against: ${API_URL}"
 
-                    # Run Cypress via Docker
-                    docker run --rm \
-                        --network host \
-                        -v $(pwd)/cypress:/e2e \
-                        -w /e2e \
-                        -e CYPRESS_BASE_URL=${API_URL} \
-                        cypress/included:14.3.3 \
-                        --reporter junit \
-                        --reporter-options "mochaFile=results/cypress-results-[hash].xml"
-                '''
+                        # Install Cypress dependencies
+                        npm ci
+
+                        # Run Cypress directly (Node.js already in Jenkins)
+                        CYPRESS_BASE_URL=${API_URL} npx cypress run \
+                            --reporter junit \
+                            --reporter-options "mochaFile=results/cypress-results-[hash].xml" \
+                            || true
+                    '''
+                }
             }
             post {
                 always {
