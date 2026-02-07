@@ -114,9 +114,10 @@ pipeline {
                             k8s/deployments/${svc}-deployment.yaml | kubectl apply -f -
                     done
 
-                    # Apply services (prod uses NodePort 30000)
+                    # Apply services (prod uses NodePort 30200)
                     for svc in apigateway userservice productservice; do
-                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" \
+                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g; \
+                             s|nodePort: 30000|nodePort: 30200|g" \
                             k8s/services/${svc}-service.yaml | kubectl apply -f -
                     done
 
@@ -128,7 +129,7 @@ pipeline {
                     echo "========== PROD Pods =========="
                     kubectl get pods -n ${K8S_NAMESPACE}
                     echo ""
-                    echo "PROD API: http://localhost:30000"
+                    echo "PROD API: http://localhost:30200"
                 '''
             }
         }
@@ -171,7 +172,7 @@ pipeline {
               PRODUCTION Deployment SUCCESSFUL
               Namespace : microservices-prod
               Image Tag : prod-${BUILD_TO_DEPLOY}
-              Prod API  : http://localhost:30000
+              Prod API  : http://localhost:30200
             ==========================================
             '''
         }
