@@ -1,0 +1,16 @@
+{
+  "validProduct": {
+    "name": "Test Widget",
+    "description": "A test widget for E2E testing",
+    "price": 29.99,
+    "sku": "TEST-001",
+    "stockQuantity": 100,
+    "category": "Electronics"
+  },
+  "updateProduct": {
+    "name": "Updated Widget",
+    "description": "Updated description",
+    "price": 39.99,
+    "stockQuantity": 150
+  }
+}

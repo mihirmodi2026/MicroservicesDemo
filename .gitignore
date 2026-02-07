@@ -36,6 +36,17 @@ bld/
 appsettings.*.local.json
 secrets.json
 cloudflare/credentials.json
+k8s/secrets/*.yaml
+!k8s/secrets/*.example.yaml
+
+# Cypress
+cypress/screenshots/
+cypress/videos/
+cypress/node_modules/
+cypress/.cypress-cache/
+
+# Jenkins
+jenkins_home/
 
 # Docker
 docker-compose.override.local.yml

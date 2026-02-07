@@ -1,0 +1,16 @@
+{
+  "validUser": {
+    "email": "testuser@example.com",
+    "password": "Password123!",
+    "confirmPassword": "Password123!",
+    "firstName": "Test",
+    "lastName": "User"
+  },
+  "adminUser": {
+    "email": "admin@example.com",
+    "password": "AdminPass123!",
+    "confirmPassword": "AdminPass123!",
+    "firstName": "Admin",
+    "lastName": "User"
+  }
+}

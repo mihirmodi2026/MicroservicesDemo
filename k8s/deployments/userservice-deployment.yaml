@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: userservice
+  namespace: microservices-demo
+  labels:
+    app: userservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: userservice
+  template:
+    metadata:
+      labels:
+        app: userservice
+    spec:
+      containers:
+        - name: userservice
+          image: microservices-demo/userservice:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5001
+          envFrom:
+            - configMapRef:
+                name: userservice-config
+          env:
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: userservice-connection
+            - name: Email__SmtpUser
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: SMTP_USER
+            - name: Email__SmtpPass
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: SMTP_PASS
+            - name: Email__FromEmail
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-secret
+                  key: SMTP_USER
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3

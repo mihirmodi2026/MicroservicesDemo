@@ -1,0 +1,28 @@
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jenkins
+    privileged: true
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.kube:/root/.kube:ro
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Xmx2g
+    restart: unless-stopped
+    networks:
+      - jenkins-network
+
+volumes:
+  jenkins_home:
+    name: jenkins_home
+
+networks:
+  jenkins-network:
+    driver: bridge

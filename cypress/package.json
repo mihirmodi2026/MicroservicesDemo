@@ -1,0 +1,15 @@
+{
+  "name": "microservices-demo-e2e",
+  "version": "1.0.0",
+  "description": "E2E tests for MicroservicesDemo",
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "cy:run:headed": "cypress run --headed",
+    "cy:run:chrome": "cypress run --browser chrome",
+    "test": "cypress run"
+  },
+  "devDependencies": {
+    "cypress": "^13.6.0"
+  }
+}
