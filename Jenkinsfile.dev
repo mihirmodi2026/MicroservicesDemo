@@ -1,0 +1,195 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = 'microservices-demo'
+        K8S_NAMESPACE = 'microservices-dev'
+        IMAGE_TAG = "dev-${BUILD_NUMBER}"
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    stages {
+
+        // ──────────────────────────────────────
+        // STAGE 1: Checkout
+        // ──────────────────────────────────────
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'echo "Build #${BUILD_NUMBER} | Tag: ${IMAGE_TAG}" && git log --oneline -3'
+            }
+        }
+
+        // ──────────────────────────────────────
+        // STAGE 2: Build .NET Solution
+        // ──────────────────────────────────────
+        stage('Restore & Build') {
+            steps {
+                sh '''
+                    echo "========== Restore Dependencies =========="
+                    dotnet restore MicroservicesDemo.sln
+
+                    echo "========== Build Solution =========="
+                    dotnet build MicroservicesDemo.sln --configuration Release --no-restore
+                '''
+            }
+        }
+
+        // ──────────────────────────────────────
+        // STAGE 3: Unit Tests
+        // ──────────────────────────────────────
+        stage('Unit Tests') {
+            steps {
+                sh '''
+                    echo "========== Running Unit Tests =========="
+                    dotnet test MicroservicesDemo.sln \
+                        --configuration Release \
+                        --no-build \
+                        --logger "trx;LogFileName=test-results.trx" \
+                        --results-directory ./TestResults \
+                        || true
+                '''
+            }
+            post {
+                always {
+                    junit testResults: '**/TestResults/*.trx', allowEmptyResults: true
+                }
+            }
+        }
+
+        // ──────────────────────────────────────
+        // STAGE 4: Docker Build (parallel)
+        // ──────────────────────────────────────
+        stage('Docker Build') {
+            parallel {
+                stage('API Gateway') {
+                    steps {
+                        sh 'docker build -t ${DOCKER_REGISTRY}/apigateway:${IMAGE_TAG} -f src/ApiGateway/Dockerfile .'
+                    }
+                }
+                stage('User Service') {
+                    steps {
+                        sh 'docker build -t ${DOCKER_REGISTRY}/userservice:${IMAGE_TAG} -f src/Services/UserService/Dockerfile .'
+                    }
+                }
+                stage('Product Service') {
+                    steps {
+                        sh 'docker build -t ${DOCKER_REGISTRY}/productservice:${IMAGE_TAG} -f src/Services/ProductService/Dockerfile .'
+                    }
+                }
+            }
+        }
+
+        // ──────────────────────────────────────
+        // STAGE 5: Deploy to Dev
+        // ──────────────────────────────────────
+        stage('Deploy to Dev') {
+            steps {
+                sh '''
+                    echo "========== Deploy to DEV (${K8S_NAMESPACE}) =========="
+
+                    # Create namespace
+                    kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+                    # Apply configs & secrets
+                    kubectl apply -f k8s/configmaps/ -n ${K8S_NAMESPACE}
+                    kubectl apply -f k8s/secrets/ -n ${K8S_NAMESPACE}
+
+                    # Deploy PostgreSQL
+                    sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" \
+                        k8s/deployments/postgres-deployment.yaml | kubectl apply -f -
+                    sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" \
+                        k8s/services/postgres-service.yaml | kubectl apply -f -
+
+                    echo "Waiting for PostgreSQL..."
+                    kubectl rollout status deployment/postgres -n ${K8S_NAMESPACE} --timeout=120s || true
+                    sleep 10
+
+                    # Deploy microservices with dev tag
+                    for svc in apigateway userservice productservice; do
+                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g; \
+                             s|image: microservices-demo/${svc}:latest|image: microservices-demo/${svc}:${IMAGE_TAG}|g" \
+                            k8s/deployments/${svc}-deployment.yaml | kubectl apply -f -
+                    done
+
+                    # Apply services
+                    for svc in apigateway userservice productservice; do
+                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g; \
+                             s|nodePort: 30000|nodePort: 30100|g" \
+                            k8s/services/${svc}-service.yaml | kubectl apply -f -
+                    done
+
+                    # Wait for rollouts
+                    kubectl rollout status deployment/userservice -n ${K8S_NAMESPACE} --timeout=120s || true
+                    kubectl rollout status deployment/productservice -n ${K8S_NAMESPACE} --timeout=120s || true
+                    kubectl rollout status deployment/apigateway -n ${K8S_NAMESPACE} --timeout=120s || true
+
+                    echo "========== DEV Pods =========="
+                    kubectl get pods -n ${K8S_NAMESPACE}
+                    echo ""
+                    echo "DEV API: http://localhost:30100"
+                '''
+            }
+        }
+
+        // ──────────────────────────────────────
+        // STAGE 6: E2E Tests against Dev
+        // ──────────────────────────────────────
+        stage('E2E Tests (Cypress)') {
+            steps {
+                sh '''
+                    echo "========== Running Cypress E2E Tests =========="
+
+                    # Get the API Gateway service ClusterIP
+                    API_IP=$(kubectl get svc apigateway-service -n ${K8S_NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+                    API_URL="http://${API_IP}:5000"
+                    echo "Testing against: ${API_URL}"
+
+                    # Run Cypress via Docker
+                    docker run --rm \
+                        --network host \
+                        -v $(pwd)/cypress:/e2e \
+                        -w /e2e \
+                        -e CYPRESS_BASE_URL=${API_URL} \
+                        cypress/included:14.3.3 \
+                        --reporter junit \
+                        --reporter-options "mochaFile=results/cypress-results-[hash].xml"
+                '''
+            }
+            post {
+                always {
+                    junit testResults: 'cypress/results/*.xml', allowEmptyResults: true
+                    archiveArtifacts artifacts: 'cypress/screenshots/**/*', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'cypress/videos/**/*', allowEmptyArchive: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '''
+            ==========================================
+              DEV + TEST Pipeline PASSED
+              Namespace : microservices-dev
+              Image Tag : dev-${BUILD_NUMBER}
+              Dev API   : http://localhost:30100
+
+              >> Ready for PROD pipeline!
+            ==========================================
+            '''
+        }
+        failure {
+            echo 'DEV + TEST Pipeline FAILED! Check logs above.'
+        }
+        always {
+            sh 'kubectl get pods -n ${K8S_NAMESPACE} 2>/dev/null || true'
+        }
+    }
+}
