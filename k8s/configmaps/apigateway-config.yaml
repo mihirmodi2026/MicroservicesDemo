@@ -6,5 +6,5 @@ metadata:
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:5000"
-  ReverseProxy__Clusters__userservice__Destinations__destination1__Address: "http://userservice-service:5001"
-  ReverseProxy__Clusters__productservice__Destinations__destination1__Address: "http://productservice-service:5002"
+  ReverseProxy__Clusters__users-cluster__Destinations__destination1__Address: "http://userservice-service:5001/"
+  ReverseProxy__Clusters__products-cluster__Destinations__destination1__Address: "http://productservice-service:5002/"
