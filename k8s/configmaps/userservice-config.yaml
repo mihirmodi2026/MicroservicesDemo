@@ -6,7 +6,7 @@ metadata:
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:5001"
-  App__BaseUrl: "http://localhost:30000"
+  App__BaseUrl: "https://api.microservicedemo.org"
   Email__SmtpHost: "smtp.gmail.com"
   Email__SmtpPort: "587"
   Email__FromName: "Microservices Demo"
