@@ -97,9 +97,13 @@ pipeline {
                     # Create namespace
                     kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-                    # Apply configs & secrets
-                    kubectl apply -f k8s/configmaps/ -n ${K8S_NAMESPACE}
-                    kubectl apply -f k8s/secrets/ -n ${K8S_NAMESPACE}
+                    # Apply configs & secrets (replace hardcoded namespace)
+                    for f in k8s/configmaps/*.yaml; do
+                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" "$f" | kubectl apply -f -
+                    done
+                    for f in k8s/secrets/*.yaml; do
+                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" "$f" | kubectl apply -f - 2>/dev/null || true
+                    done
 
                     # Deploy PostgreSQL
                     sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" \
