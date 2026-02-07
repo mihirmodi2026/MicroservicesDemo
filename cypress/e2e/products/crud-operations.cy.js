@@ -152,7 +152,7 @@ describe('Product CRUD Operations', () => {
       cy.request({
         method: 'PATCH',
         url: `${Cypress.env('apiUrl')}/api/products/${productId}/stock`,
-        body: newStock,
+        body: JSON.stringify(newStock),
         headers: {
           'Content-Type': 'application/json',
         },

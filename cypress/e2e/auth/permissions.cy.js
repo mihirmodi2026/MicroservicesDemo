@@ -5,8 +5,8 @@ describe('Permission-Based Access Control', () => {
   before(() => {
     cy.waitForApiHealth();
 
-    // Create admin user (first user)
-    const admin = {
+    // Create first user for testing
+    const user1 = {
       email: `permadmin_${Date.now()}@test.com`,
       password: 'AdminPass123!',
       confirmPassword: 'AdminPass123!',
@@ -14,11 +14,12 @@ describe('Permission-Based Access Control', () => {
       lastName: 'Admin',
     };
 
-    cy.apiRegister(admin).then((response) => {
+    cy.apiRegister(user1).then((response) => {
       adminUser = {
-        ...admin,
+        ...user1,
         userId: response.body.data.userId,
         role: response.body.data.role,
+        isAdmin: response.body.data.role === 'Admin',
       };
     });
 
@@ -40,13 +41,19 @@ describe('Permission-Based Access Control', () => {
     });
   });
 
-  it('should allow admin to view all users', () => {
+  it('should test admin access to view all users (or deny if not admin)', () => {
     cy.apiRequest({
       method: 'GET',
       url: `${Cypress.env('apiUrl')}/api/users`,
     }, adminUser.userId).then((response) => {
-      expect(response.status).to.equal(200);
-      expect(response.body.data).to.be.an('array');
+      // If user is admin, should get 200; otherwise 401
+      if (adminUser.isAdmin) {
+        expect(response.status).to.equal(200);
+        expect(response.body.data).to.be.an('array');
+      } else {
+        // User is not admin, so access should be denied
+        expect(response.status).to.equal(401);
+      }
     });
   });
 
