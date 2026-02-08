@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using UserService.Data;
 using UserService.Services;
@@ -23,6 +24,13 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 // Configure pipeline
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    KnownNetworks = { },
+    KnownProxies = { }
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

@@ -94,7 +94,9 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> Login(LoginDto dto)
     {
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var ipAddress = HttpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
+            ?? HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+            ?? HttpContext.Connection.RemoteIpAddress?.ToString();
         var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
 
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email.ToLower());
