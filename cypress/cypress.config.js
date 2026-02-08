@@ -1,7 +1,7 @@
 const { defineConfig } = require('cypress');
 
 // Default to K8s NodePort, can be overridden with CYPRESS_BASE_URL env var
-const baseUrl = process.env.CYPRESS_BASE_URL || 'http://localhost:30000';
+const baseUrl = process.env.CYPRESS_BASE_URL || 'http://localhost:30100';
 
 module.exports = defineConfig({
   e2e: {
