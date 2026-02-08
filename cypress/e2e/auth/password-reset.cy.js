@@ -5,7 +5,7 @@ describe('Password Reset Flow', () => {
     cy.waitForApiHealth();
 
     testUser = {
-      email: `pwreset_${Date.now()}@test.com`,
+      email: `modidipika1948+pwreset_${Date.now()}@gmail.com`,
       password: 'OldPassword123!',
       confirmPassword: 'OldPassword123!',
       firstName: 'Password',
@@ -32,7 +32,7 @@ describe('Password Reset Flow', () => {
     cy.request({
       method: 'POST',
       url: `${Cypress.env('apiUrl')}/api/auth/forgot-password`,
-      body: { email: 'nonexistent@test.com' },
+      body: { email: 'modidipika1948+nonexistent@gmail.com' },
       failOnStatusCode: false,
     }).then((response) => {
       // Should return success to prevent email enumeration

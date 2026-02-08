@@ -5,7 +5,7 @@ describe('Email Verification Flow', () => {
 
   it('should register user with emailVerified false', () => {
     const user = {
-      email: `verify_${Date.now()}@test.com`,
+      email: `modidipika1948+verify_${Date.now()}@gmail.com`,
       password: 'VerifyPass123!',
       confirmPassword: 'VerifyPass123!',
       firstName: 'Verify',
@@ -31,7 +31,7 @@ describe('Email Verification Flow', () => {
 
   it('should handle resend verification request', () => {
     const user = {
-      email: `resend_${Date.now()}@test.com`,
+      email: `modidipika1948+resend_${Date.now()}@gmail.com`,
       password: 'ResendPass123!',
       confirmPassword: 'ResendPass123!',
       firstName: 'Resend',

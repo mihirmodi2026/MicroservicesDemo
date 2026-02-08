@@ -6,7 +6,7 @@ describe('User Login', () => {
 
     // Create a test user for login tests
     testUser = {
-      email: `logintest_${Date.now()}@test.com`,
+      email: `modidipika1948+logintest_${Date.now()}@gmail.com`,
       password: 'LoginPass123!',
       confirmPassword: 'LoginPass123!',
       firstName: 'Login',
@@ -24,7 +24,7 @@ describe('User Login', () => {
   });
 
   it('should fail login with invalid credentials', () => {
-    cy.apiLogin('nonexistent@test.com', 'wrongpassword').then((response) => {
+    cy.apiLogin('modidipika1948+nonexistent@gmail.com', 'wrongpassword').then((response) => {
       expect(response.status).to.equal(401);
       expect(response.body.message).to.include('Invalid email or password');
     });

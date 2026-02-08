@@ -5,7 +5,7 @@ describe('User Registration', () => {
 
   it('should register a new user successfully', () => {
     const user = {
-      email: `newuser_${Date.now()}@test.com`,
+      email: `modidipika1948+newuser_${Date.now()}@gmail.com`,
       password: 'Password123!',
       confirmPassword: 'Password123!',
       firstName: 'New',
@@ -23,7 +23,7 @@ describe('User Registration', () => {
 
   it('should make first registered user an admin', () => {
     const adminUser = {
-      email: `firstadmin_${Date.now()}@test.com`,
+      email: `modidipika1948+firstadmin_${Date.now()}@gmail.com`,
       password: 'AdminPass123!',
       confirmPassword: 'AdminPass123!',
       firstName: 'First',
@@ -39,7 +39,7 @@ describe('User Registration', () => {
 
   it('should reject registration with existing email', () => {
     const user = {
-      email: `duplicate_${Date.now()}@test.com`,
+      email: `modidipika1948+duplicate_${Date.now()}@gmail.com`,
       password: 'Password123!',
       confirmPassword: 'Password123!',
       firstName: 'Duplicate',

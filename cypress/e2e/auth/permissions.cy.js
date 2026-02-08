@@ -7,7 +7,7 @@ describe('Permission-Based Access Control', () => {
 
     // Create first user for testing
     const user1 = {
-      email: `permadmin_${Date.now()}@test.com`,
+      email: `modidipika1948+permadmin_${Date.now()}@gmail.com`,
       password: 'AdminPass123!',
       confirmPassword: 'AdminPass123!',
       firstName: 'Permission',
@@ -25,7 +25,7 @@ describe('Permission-Based Access Control', () => {
 
     // Create regular user (second user)
     const regular = {
-      email: `permuser_${Date.now()}@test.com`,
+      email: `modidipika1948+permuser_${Date.now()}@gmail.com`,
       password: 'UserPass123!',
       confirmPassword: 'UserPass123!',
       firstName: 'Regular',
