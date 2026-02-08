@@ -101,10 +101,11 @@ pipeline {
                     for f in k8s/configmaps/*.yaml; do
                         sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" "$f" | kubectl apply -f -
                     done
-                    for f in k8s/secrets/*.yaml; do
-                        # Skip example files
-                        echo "$f" | grep -q "example" && continue
-                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" "$f" | kubectl apply -f - 2>/dev/null || true
+                    # Copy secrets from main namespace (real secrets are gitignored)
+                    for secret in postgres-secret smtp-secret; do
+                        kubectl get secret ${secret} -n microservices-demo -o json \
+                            | sed "s|\"namespace\": \"microservices-demo\"|\"namespace\": \"${K8S_NAMESPACE}\"|g" \
+                            | kubectl apply -f - 2>/dev/null || true
                     done
 
                     # Deploy PostgreSQL
