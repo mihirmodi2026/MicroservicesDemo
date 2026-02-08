@@ -28,6 +28,20 @@ RUN apt-get update && \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs
 
+# Install Cypress system dependencies (Xvfb, GTK, etc.)
+RUN apt-get update && \
+    apt-get install -y \
+    xvfb \
+    libgtk2.0-0 \
+    libgtk-3-0 \
+    libgbm-dev \
+    libnotify-dev \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    libxtst6 \
+    xauth
+
 # Clean up
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
