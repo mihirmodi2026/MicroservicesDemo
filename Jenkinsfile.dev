@@ -27,17 +27,37 @@ pipeline {
         }
 
         // ──────────────────────────────────────
-        // STAGE 2: Build .NET Solution
+        // STAGE 2: Build Each Solution
         // ──────────────────────────────────────
         stage('Restore & Build') {
-            steps {
-                sh '''
-                    echo "========== Restore Dependencies =========="
-                    dotnet restore MicroservicesDemo.sln
-
-                    echo "========== Build Solution =========="
-                    dotnet build MicroservicesDemo.sln --configuration Release --no-restore
-                '''
+            parallel {
+                stage('ApiGateway') {
+                    steps {
+                        sh '''
+                            echo "========== Build ApiGateway =========="
+                            dotnet restore src/ApiGateway/ApiGateway.sln
+                            dotnet build src/ApiGateway/ApiGateway.sln --configuration Release --no-restore
+                        '''
+                    }
+                }
+                stage('UserService') {
+                    steps {
+                        sh '''
+                            echo "========== Build UserService =========="
+                            dotnet restore src/Services/UserService/UserService.sln
+                            dotnet build src/Services/UserService/UserService.sln --configuration Release --no-restore
+                        '''
+                    }
+                }
+                stage('ProductService') {
+                    steps {
+                        sh '''
+                            echo "========== Build ProductService =========="
+                            dotnet restore src/Services/ProductService/ProductService.sln
+                            dotnet build src/Services/ProductService/ProductService.sln --configuration Release --no-restore
+                        '''
+                    }
+                }
             }
         }
 
@@ -83,6 +103,11 @@ pipeline {
                         sh 'docker build -t ${DOCKER_REGISTRY}/productservice:${IMAGE_TAG} -f src/Services/ProductService/Dockerfile .'
                     }
                 }
+                stage('UI') {
+                    steps {
+                        sh 'docker build -t ${DOCKER_REGISTRY}/ui:${IMAGE_TAG} -f src/UI/Dockerfile src/UI'
+                    }
+                }
             }
         }
 
@@ -118,21 +143,22 @@ pipeline {
                     kubectl rollout status deployment/postgres -n ${K8S_NAMESPACE} --timeout=120s || true
                     sleep 10
 
-                    # Deploy microservices with dev tag
-                    for svc in apigateway userservice productservice; do
+                    # Deploy all services with dev tag (apigateway, userservice, productservice, ui)
+                    for svc in apigateway userservice productservice ui; do
                         sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g; \
                              s|image: microservices-demo/${svc}:latest|image: microservices-demo/${svc}:${IMAGE_TAG}|g" \
                             k8s/deployments/${svc}-deployment.yaml | kubectl apply -f -
                     done
 
                     # Apply services
-                    for svc in apigateway userservice productservice; do
+                    for svc in apigateway userservice productservice ui; do
                         sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g; \
                              s|nodePort: 30000|nodePort: 30100|g" \
                             k8s/services/${svc}-service.yaml | kubectl apply -f -
                     done
 
                     # Wait for rollouts
+                    kubectl rollout status deployment/ui -n ${K8S_NAMESPACE} --timeout=120s || true
                     kubectl rollout status deployment/userservice -n ${K8S_NAMESPACE} --timeout=120s || true
                     kubectl rollout status deployment/productservice -n ${K8S_NAMESPACE} --timeout=120s || true
                     kubectl rollout status deployment/apigateway -n ${K8S_NAMESPACE} --timeout=120s || true

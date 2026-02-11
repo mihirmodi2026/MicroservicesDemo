@@ -38,7 +38,7 @@ pipeline {
                     echo "Namespace : ${K8S_NAMESPACE}"
 
                     # Verify dev images exist
-                    for svc in apigateway userservice productservice; do
+                    for svc in apigateway userservice productservice ui; do
                         if docker image inspect ${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG} > /dev/null 2>&1; then
                             echo "FOUND: ${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG}"
                         else
@@ -58,7 +58,7 @@ pipeline {
             steps {
                 sh '''
                     echo "========== Tagging Images for PROD =========="
-                    for svc in apigateway userservice productservice; do
+                    for svc in apigateway userservice productservice ui; do
                         docker tag ${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG} ${DOCKER_REGISTRY}/${svc}:${PROD_TAG}
                         docker tag ${DOCKER_REGISTRY}/${svc}:${IMAGE_TAG} ${DOCKER_REGISTRY}/${svc}:latest
                         echo "Tagged: ${svc}:${IMAGE_TAG} -> ${svc}:${PROD_TAG} + ${svc}:latest"
@@ -93,8 +93,11 @@ pipeline {
                     for f in k8s/configmaps/*.yaml; do
                         sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" "$f" | kubectl apply -f -
                     done
-                    for f in k8s/secrets/*.yaml; do
-                        sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g" "$f" | kubectl apply -f - 2>/dev/null || true
+                    # Copy secrets from main namespace (real secrets are gitignored)
+                    for secret in postgres-secret smtp-secret; do
+                        kubectl get secret ${secret} -n microservices-demo -o json \
+                            | sed "s|\"namespace\": \"microservices-demo\"|\"namespace\": \"${K8S_NAMESPACE}\"|g" \
+                            | kubectl apply -f - 2>/dev/null || true
                     done
 
                     # Deploy PostgreSQL
@@ -108,20 +111,21 @@ pipeline {
                     sleep 10
 
                     # Deploy microservices with prod tag
-                    for svc in apigateway userservice productservice; do
+                    for svc in apigateway userservice productservice ui; do
                         sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g; \
                              s|image: microservices-demo/${svc}:latest|image: microservices-demo/${svc}:${PROD_TAG}|g" \
                             k8s/deployments/${svc}-deployment.yaml | kubectl apply -f -
                     done
 
                     # Apply services (prod uses NodePort 30200)
-                    for svc in apigateway userservice productservice; do
+                    for svc in apigateway userservice productservice ui; do
                         sed "s|namespace: microservices-demo|namespace: ${K8S_NAMESPACE}|g; \
                              s|nodePort: 30000|nodePort: 30200|g" \
                             k8s/services/${svc}-service.yaml | kubectl apply -f -
                     done
 
                     # Wait for rollouts (fail pipeline if deployment fails)
+                    kubectl rollout status deployment/ui -n ${K8S_NAMESPACE} --timeout=180s
                     kubectl rollout status deployment/userservice -n ${K8S_NAMESPACE} --timeout=180s
                     kubectl rollout status deployment/productservice -n ${K8S_NAMESPACE} --timeout=180s
                     kubectl rollout status deployment/apigateway -n ${K8S_NAMESPACE} --timeout=180s

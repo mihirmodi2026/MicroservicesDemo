@@ -20,6 +20,17 @@ services:
     networks:
       - microservices-network
 
+  # UI (Nginx)
+  ui:
+    build:
+      context: ./src/UI
+      dockerfile: Dockerfile
+    container_name: ui
+    ports:
+      - "8080:8080"
+    networks:
+      - microservices-network
+
   # API Gateway
   apigateway:
     build:
@@ -34,6 +45,8 @@ services:
       userservice:
         condition: service_started
       productservice:
+        condition: service_started
+      ui:
         condition: service_started
     networks:
       - microservices-network

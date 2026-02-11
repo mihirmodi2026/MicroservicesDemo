@@ -23,10 +23,6 @@ var app = builder.Build();
 // Use CORS
 app.UseCors("AllowAll");
 
-// Serve static files (UI)
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
 // Health check endpoint
 app.MapHealthChecks("/health");
 
