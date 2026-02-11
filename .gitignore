@@ -33,6 +33,7 @@ bld/
 .env
 *.env
 !.env.example
+MicroService.txt
 appsettings.*.local.json
 secrets.json
 cloudflare/credentials.json
